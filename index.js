@@ -135,6 +135,49 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// 기상청 API 프록시 엔드포인트
+app.get('/api/kma/*', async (req, res) => {
+  try {
+    // 요청 경로에서 /api/kma를 /api/typ01/url로 변환 (Vite 설정과 동일)
+    const kmaPath = req.path.replace(/^\/api\/kma/, '/api/typ01/url');
+    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    const kmaUrl = `https://apihub.kma.go.kr${kmaPath}${queryString}`;
+    
+    console.log(`기상청 API 프록시: ${kmaUrl}`);
+    
+    // Node.js 18+ 내장 fetch 사용 또는 node-fetch
+    const fetch = globalThis.fetch || (await import('node-fetch')).default;
+    
+    const response = await fetch(kmaUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': '*/*',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`기상청 API 오류: ${response.status} ${response.statusText}`);
+    }
+
+    // 응답 타입에 따라 처리
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      const buffer = await response.arrayBuffer();
+      res.set('Content-Type', contentType || 'application/octet-stream');
+      res.send(Buffer.from(buffer));
+    }
+  } catch (error) {
+    console.error('기상청 API 프록시 오류:', error);
+    res.status(500).json({ 
+      error: '기상청 API 호출 중 오류가 발생했습니다.',
+      details: error.message 
+    });
+  }
+});
+
 // 헬스체크 엔드포인트
 app.get('/api/health', (req, res) => {
   res.json({ 
